@@ -511,8 +511,8 @@ function scrapePages(results) {
 }
 
 function formatSearchContext(results) {
-  var MAX_TOTAL_CHARS = 8000;
-  var MAX_PER_PAGE = 2000;
+  var MAX_TOTAL_CHARS = 4500;
+  var MAX_PER_PAGE = 1000;
   var SEPARATOR = "\n\n---\n\n";
   var parts = [];
   var totalChars = 0;
@@ -562,7 +562,7 @@ async function callReasoner(question, searchContext, mcqa) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
       ],
-      max_tokens: 1024,
+      max_tokens: 768,
       temperature: 0.1,
     }),
   });
@@ -595,6 +595,20 @@ function extractJsonNumber(text, field) {
   var re = new RegExp('"' + field + '"\\s*:\\s*([0-9.]+)');
   var m = text.match(re);
   return m ? parseFloat(m[1]) : null;
+}
+
+function extractFirstReasonFromRankings(text) {
+  var re = /"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/;
+  var m = text.match(re);
+  return m ? m[1].replace(/\\"/g, '"').replace(/\\n/g, "\n") : null;
+}
+
+function looksLikeRawJson(text) {
+  if (!text || text.length < 20) return false;
+  var t = text.trim();
+  return /^\s*[`"']?\s*json\s*[\s{]?/i.test(t) ||
+    (/^\s*\{/.test(t) && /"result_rankings"/.test(t)) ||
+    (t.indexOf('"result_rankings"') !== -1 && t.indexOf('"answer"') === -1);
 }
 
 function parseReasonerResponse(text, mcqa) {
@@ -663,12 +677,26 @@ function parseReasonerResponse(text, mcqa) {
     answer = answer.charAt(0);
   }
 
-  if (!reasoning && !answer) {
+  if (!answer) {
     var stripped = afterThink
+      .replace(/```[\s\S]*?```/g, "")
       .replace(/```[\s\S]*$/g, "")
+      .replace(/\{[\s\S]*\}/g, "")
       .replace(/\{[\s\S]*$/g, "")
       .trim();
-    if (stripped) answer = stripped;
+    var rawStripped = stripped || text.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
+
+    if (looksLikeRawJson(rawStripped)) {
+      answer = extractJsonField(text, "answer") || extractJsonField(afterThink, "answer");
+      if (!answer) {
+        var firstReason = extractFirstReasonFromRankings(text) || extractFirstReasonFromRankings(afterThink);
+        if (firstReason) {
+          answer = "Based on the top-ranked source: " + firstReason;
+        }
+      }
+    }
+    if (!answer && stripped) answer = stripped;
+    if (!answer && rawStripped && !looksLikeRawJson(rawStripped)) answer = rawStripped;
   }
 
   return {
