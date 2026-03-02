@@ -20,6 +20,10 @@ All inference runs on **Ministral-3-3B-Instruct** with LoRA adapters served via 
 
 ## Architecture
 
+A detailed architecture diagram (runtime flow, training pipeline, data formats, component map) is in **[docs/architecture.md](docs/architecture.md)** — including Mermaid sequence/flow diagrams for GitHub.
+
+High-level flow:
+
 ```
 User Question
      │
