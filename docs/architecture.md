@@ -8,23 +8,23 @@ This document describes the full architecture of the Deepscout deep-research age
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    DEEPSCOUT SYSTEM                                      │
+│                                    DEEPSCOUT SYSTEM                                     │
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                           │
-│   ┌──────────────┐     ┌─────────────────────────────────────────────────────────────┐   │
-│   │   USER       │     │                    CHROME EXTENSION                         │   │
-│   │   (browser)  │◄───►│  Side Panel UI  ◄──►  Background  ◄──►  Active Tab (DDG)     │   │
-│   └──────┬───────┘     └───────────────────────────┬─────────────────────────────────┘   │
-│          │                                          │                                      │
-│          │ question                                 │ search query                        │
-│          │                                          │ results + scraped content           │
-│          ▼                                          ▼                                      │
-│   ┌──────────────────────────────────────────────────────────────────────────────────┐   │
-│   │                         vLLM SERVER (localhost:8001)                              │   │
+│                                                                                         │
+│   ┌──────────────┐     ┌─────────────────────────────────────────────────────────────┐  │
+│   │   USER       │     │                    CHROME EXTENSION                         │  │
+│   │   (browser)  │◄───►│  Side Panel UI  ◄──►  Background  ◄──►  Active Tab (DDG)    │  │
+│   └──────┬───────┘     └───────────────────────────┬─────────────────────────────────┘  │
+│          │                                          │                                   │
+│          │ question                                 │ search query                      │
+│          │                                          │ results + scraped content         │
+│          ▼                                          ▼                                   │
+│   ┌──────────────────────────────────────────────────────────────────────────────────┐  │
+│   │                         vLLM SERVER (localhost:8001)                             │  │
 │   │   Base: Ministral-3-3B-Instruct  │  LoRA: search-query-agent  │  LoRA: search-reasoner │   │
 │   └──────────────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                           │
-│   OFFLINE:  pipeline/ (Brave + scrape) → data/  →  search_reasoner/generate_cot  →  train  │
+│   OFFLINE:  pipeline/ (Brave + scrape) → data/  →  search_reasoner/generate_cot  →  train │
 │                                                                                           │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
