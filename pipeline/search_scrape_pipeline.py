@@ -340,7 +340,7 @@ def main():
     )
     parser.add_argument("--count", type=int, default=10, help="Results per query (1-20)")
     parser.add_argument(
-        "--output", default="outputs/search_dataset.jsonl",
+        "--output", default="data/search_dataset.jsonl",
         help="Output .jsonl file path",
     )
     parser.add_argument("--max-chars", type=int, default=50000, help="Max chars per page")

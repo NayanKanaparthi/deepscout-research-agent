@@ -61,29 +61,31 @@ User Question
 ## Project Structure
 
 ```
-mistral_hackathon_2026/
+deepscout-research-agent/
+├── search_query_agent/        # Model 1: MCQ → search query generation
+│   ├── train.py               # SFT training script
+│   ├── system_prompt.md
+│   └── data.jsonl
+├── search_reasoner/           # Model 2: Reason over search results
+│   ├── train.py               # QLoRA fine-tuning
+│   ├── generate_cot_dataset.py # CoT data via teacher distillation
+│   └── eval.py                # Evaluation (base vs fine-tuned)
+├── pipeline/                  # Data collection
+│   ├── search_scrape_pipeline.py # Brave Search + scrape → JSONL
+│   ├── brave_crawler.py
+│   └── search_client.py       # Brave API client
 ├── chrome-extension/          # Deepscout Chrome extension
-│   ├── manifest.json          # Extension manifest (MV3)
-│   ├── sidepanel.html         # UI with dark theme
-│   ├── sidepanel.js           # Pipeline orchestration + rendering
-│   ├── background.js          # Search + scraping via browser tabs
-│   ├── content.js             # Page content extraction
-│   └── icons/                 # Extension icons
-├── train_search_reasoner.py   # Fine-tuning script for search-reasoner
-├── train_sft_stage1.py        # SFT Stage 1 training
-├── train_sft_stage2.py        # SFT Stage 2 training
-├── train_grpo.py              # GRPO reinforcement learning
-├── train_qat.py               # Quantization-aware training
-├── generate_cot_dataset.py    # Chain-of-thought dataset generation
-├── eval_search_reasoner.py    # Evaluation script
-├── search_scrape_pipeline.py  # Search + scrape data pipeline
-├── baseline_test.py           # Baseline evaluation
-├── baseline_100.py            # 100-question baseline benchmark
-├── inference.py               # Standalone inference script
-├── prompts.py                 # Prompt templates
-├── brave_crawler.py           # Brave search crawler for data collection
-├── requirements.txt           # Python dependencies
-└── docs/                      # Documentation
+│   ├── manifest.json
+│   ├── sidepanel.html
+│   ├── sidepanel.js
+│   ├── background.js
+│   └── content.js
+├── data/                      # Datasets (see data/README.md)
+├── outputs/                   # Eval reports, baseline results
+├── docs/
+├── baseline_100.py            # 100-question benchmark
+├── requirements.txt
+└── README.md
 ```
 
 ## Setup
@@ -105,17 +107,16 @@ pip install -r requirements.txt
 
 ```bash
 # Train search-query-agent
-python train_sft_stage1.py \
-    --epochs 3 \
-    --lr 2e-4 \
-    --lora_r 64 \
+python search_query_agent/train.py \
+    --epochs 3 --lr 2e-4 --lora_r 64 \
     --output_dir ./search-query-agent-sft
 
+# Generate CoT training data (requires MISTRAL_API_KEY)
+python search_reasoner/generate_cot_dataset.py
+
 # Train search-reasoner with chain-of-thought
-python train_search_reasoner.py \
-    --epochs 3 \
-    --lr 2e-4 \
-    --lora_r 64 \
+python search_reasoner/train.py \
+    --epochs 3 --lr 2e-4 --lora_r 64 \
     --output_dir ./search-reasoner-3b-sft
 ```
 

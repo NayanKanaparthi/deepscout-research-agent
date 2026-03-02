@@ -660,7 +660,7 @@ def main():
     )
     parser.add_argument(
         "--dataset", type=str,
-        default="outputs/cot_training_data.jsonl",
+        default="data/cot_training_data.jsonl",
     )
     parser.add_argument(
         "--output_dir", type=str,

@@ -567,17 +567,17 @@ def main():
     )
     parser.add_argument(
         "--query-file",
-        default="search_query_data.jsonl(500)",
+        default="data/search_query_data.jsonl",
         help="Path to search_query_data JSONL file",
     )
     parser.add_argument(
         "--search-file",
-        default="outputs/search_dataset.jsonl",
+        default="data/search_dataset.jsonl",
         help="Path to search_dataset JSONL file",
     )
     parser.add_argument(
         "--output-file",
-        default="outputs/cot_training_data.jsonl",
+        default="data/cot_training_data.jsonl",
         help="Output JSONL path",
     )
     parser.add_argument(

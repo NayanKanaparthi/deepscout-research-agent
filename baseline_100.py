@@ -3,9 +3,9 @@
 Baseline Evaluation — 100 Queries via Mistral API (mistral-small-latest)
 
 Chain:
-  mcqa_search.jsonl          → original question + options + ground truth (expected_answer)
-  search_query_data.jsonl    → maps question → search query
-  outputs/search_dataset.jsonl → search query → 10 Brave results + scraped content
+  data/mcqa_search.jsonl          → original question + options + ground truth (expected_answer)
+  data/search_query_data.jsonl    → maps question → search query
+  data/search_dataset.jsonl       → search query → 10 Brave results + scraped content
 
 Flow:
   1. Join all three datasets
@@ -32,7 +32,7 @@ from mistralai import Mistral
 # Config
 # ──────────────────────────────────────────────
 
-API_KEY = "x7VUmwCrgXfOubAu6CLodGFMUqj7cioi"
+API_KEY = os.environ.get("MISTRAL_API_KEY", "")
 MODEL = "mistral-small-latest"
 NUM_QUERIES = 100
 MAX_CHARS_PER_PAGE = 2500
@@ -102,22 +102,22 @@ def load_jsonl(path, max_n=None):
 def build_paired_dataset(max_pairs=NUM_QUERIES):
     """
     Join the 3 datasets:
-      mcqa_search.jsonl           → question text + GT answer letter
-      search_query_data.jsonl     → question text → search query
-      outputs/search_dataset.jsonl → search query → 10 results + scraped pages
+      data/mcqa_search.jsonl      → question text + GT answer letter
+      data/search_query_data.jsonl → question text → search query
+      data/search_dataset.jsonl   → search query → 10 results + scraped pages
 
     Returns list of dicts with all the info we need.
     """
-    print("  Loading mcqa_search.jsonl...")
-    mcqa = load_jsonl("mcqa_search.jsonl")
+    print("  Loading data/mcqa_search.jsonl...")
+    mcqa = load_jsonl("data/mcqa_search.jsonl")
     print(f"    {len(mcqa)} records")
 
-    print("  Loading search_query_data.jsonl...")
-    sqd = load_jsonl("search_query_data.jsonl")
+    print("  Loading data/search_query_data.jsonl...")
+    sqd = load_jsonl("data/search_query_data.jsonl")
     print(f"    {len(sqd)} records")
 
-    print("  Loading outputs/search_dataset.jsonl...")
-    search = load_jsonl("outputs/search_dataset.jsonl")
+    print("  Loading data/search_dataset.jsonl...")
+    search = load_jsonl("data/search_dataset.jsonl")
     print(f"    {len(search)} records")
 
     # Build mcqa index: first 80 chars of input → mcqa record
@@ -314,6 +314,9 @@ def parse_response(text):
 
 
 def main():
+    if not API_KEY:
+        print("ERROR: MISTRAL_API_KEY env var required.")
+        return
     print("=" * 70)
     print(f"  Baseline Evaluation — {NUM_QUERIES} Queries")
     print(f"  Model: {MODEL}")

@@ -16,9 +16,9 @@ NayanK/search-reasoner-3b, and computes:
 Logs everything to Weights & Biases and saves local JSON + Markdown reports.
 
 Usage:
-    python eval_search_reasoner.py \
-        --mcqa_file mcqa_search.jsonl \
-        --cot_file outputs/cot_training_data.jsonl \
+    python search_reasoner/eval.py \
+        --mcqa_file data/mcqa_search.jsonl \
+        --cot_file data/cot_training_data.jsonl \
         --base_model mistralai/Ministral-3-3B-Instruct-2512-BF16 \
         --finetuned_repo NayanK/search-reasoner-3b \
         --wandb_project search-reasoner-3b
@@ -696,8 +696,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Evaluate base vs fine-tuned Search Reasoner"
     )
-    parser.add_argument("--mcqa_file", default="mcqa_search.jsonl")
-    parser.add_argument("--cot_file", default="outputs/cot_training_data.jsonl")
+    parser.add_argument("--mcqa_file", default="data/mcqa_search.jsonl")
+    parser.add_argument("--cot_file", default="data/cot_training_data.jsonl")
     parser.add_argument(
         "--base_model", default="mistralai/Ministral-3-3B-Instruct-2512-BF16"
     )
