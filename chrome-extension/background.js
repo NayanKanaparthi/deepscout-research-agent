@@ -5,6 +5,7 @@ chrome.sidePanel
 const SEARCH_TIMEOUT_MS = 12000;
 const SCRAPE_PER_PAGE_MS = 8000;
 const MAX_PAGES_TO_SCRAPE = 10;
+const TAVILY_API_URL = "https://api.tavily.com/search";
 
 function scrapeDDGResults() {
   const results = [];
@@ -95,7 +96,13 @@ function navigateAndExtract(tabId, url, timeoutMs) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "do_search") {
-    handleDoSearch(message);
+    chrome.storage.sync.get(["searchProvider", "tavilyApiKey"], (cfg) => {
+      if (cfg.searchProvider === "tavily" && cfg.tavilyApiKey) {
+        handleDoSearchTavily(message, cfg.tavilyApiKey);
+      } else {
+        handleDoSearch(message);
+      }
+    });
     return true;
   }
   if (message.action === "scrape_pages") {
@@ -155,6 +162,58 @@ function handleDoSearch(message) {
       respond({ error: "Failed to navigate: " + err.message });
     });
   });
+}
+
+async function handleDoSearchTavily(message, apiKey) {
+  const { query, requestId } = message;
+
+  let settled = false;
+  let timeoutId = null;
+
+  function respond(payload) {
+    if (settled) return;
+    settled = true;
+    if (timeoutId) clearTimeout(timeoutId);
+    chrome.runtime.sendMessage(
+      Object.assign({ action: "search_results", requestId: requestId }, payload)
+    );
+  }
+
+  timeoutId = setTimeout(() => {
+    respond({ error: "Tavily search timed out after " + SEARCH_TIMEOUT_MS + "ms" });
+  }, SEARCH_TIMEOUT_MS);
+
+  try {
+    const resp = await fetch(TAVILY_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey,
+      },
+      body: JSON.stringify({
+        query: query,
+        search_depth: "basic",
+        max_results: 10,
+        include_answer: false,
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      respond({ error: "Tavily API error " + resp.status + ": " + errText });
+      return;
+    }
+
+    const data = await resp.json();
+    const results = (data.results || []).map((r) => ({
+      title: r.title || "",
+      url: r.url || "",
+      snippet: r.content || "",
+    }));
+    respond({ results: results });
+  } catch (err) {
+    respond({ error: "Tavily fetch failed: " + err.message });
+  }
 }
 
 async function handleScrapePages(message) {

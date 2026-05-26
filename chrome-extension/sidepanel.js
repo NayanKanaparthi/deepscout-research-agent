@@ -846,5 +846,40 @@ async function handleSend() {
   }
 }
 
+// -- Settings Panel --
+const settingsBtn = document.getElementById("settings-btn");
+const settingsOverlay = document.getElementById("settings-overlay");
+const settingsCancelBtn = document.getElementById("settings-cancel-btn");
+const settingsSaveBtn = document.getElementById("settings-save-btn");
+const searchProviderSelect = document.getElementById("search-provider-select");
+const tavilyApiKeyInput = document.getElementById("tavily-api-key-input");
+
+settingsBtn.addEventListener("click", () => {
+  chrome.storage.sync.get(["searchProvider", "tavilyApiKey"], (cfg) => {
+    searchProviderSelect.value = cfg.searchProvider || "ddg";
+    tavilyApiKeyInput.value = cfg.tavilyApiKey || "";
+    settingsOverlay.classList.add("visible");
+  });
+});
+
+settingsCancelBtn.addEventListener("click", () => {
+  settingsOverlay.classList.remove("visible");
+});
+
+settingsOverlay.addEventListener("click", (e) => {
+  if (e.target === settingsOverlay) {
+    settingsOverlay.classList.remove("visible");
+  }
+});
+
+settingsSaveBtn.addEventListener("click", () => {
+  chrome.storage.sync.set({
+    searchProvider: searchProviderSelect.value,
+    tavilyApiKey: tavilyApiKeyInput.value.trim(),
+  }, () => {
+    settingsOverlay.classList.remove("visible");
+  });
+});
+
 // -- Init --
 userInput.focus();

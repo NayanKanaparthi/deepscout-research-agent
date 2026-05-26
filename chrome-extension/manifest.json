@@ -7,13 +7,15 @@
     "sidePanel",
     "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "storage"
   ],
   "host_permissions": [
     "http://localhost:8000/*",
     "http://localhost:8001/*",
     "https://html.duckduckgo.com/*",
     "https://duckduckgo.com/*",
+    "https://api.tavily.com/*",
     "<all_urls>"
   ],
   "side_panel": {
