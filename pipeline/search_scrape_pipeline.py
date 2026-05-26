@@ -112,6 +112,36 @@ def brave_search(query: str, api_key: str, count: int = 10) -> dict:
     return resp.json()
 
 
+def tavily_search(query: str, api_key: str, count: int = 10) -> dict:
+    """Search via Tavily, returning results in the same format as brave_search()."""
+    from tavily import TavilyClient
+
+    client = TavilyClient(api_key=api_key)
+    resp = client.search(query=query, max_results=count, search_depth="basic")
+
+    normalized_results = []
+    for r in resp.get("results", []):
+        normalized_results.append({
+            "title": r.get("title", ""),
+            "url": r.get("url", ""),
+            "description": r.get("content", ""),
+        })
+
+    return {"web": {"results": normalized_results}}
+
+
+def provider_search(query: str, api_key: str, count: int = 10, provider: str = None) -> dict:
+    """
+    Provider-agnostic search dispatcher.
+
+    Selects Brave or Tavily based on the provider argument or SEARCH_PROVIDER env var.
+    """
+    provider = (provider or os.environ.get("SEARCH_PROVIDER", "brave")).lower()
+    if provider == "tavily":
+        return tavily_search(query=query, api_key=api_key, count=count)
+    return brave_search(query=query, api_key=api_key, count=count)
+
+
 # ---------------------------------------------------------------------------
 # Scraper
 # ---------------------------------------------------------------------------
@@ -209,13 +239,14 @@ def process_query(
     api_key: str,
     count: int,
     max_chars: int,
+    provider: str = None,
 ) -> dict:
     """Search + scrape for a single query. Returns a dataset record."""
     print(f"\n[{query_id}] Searching: '{query}' (count={count})")
 
     try:
-        search_data = brave_search(query=query, api_key=api_key, count=count)
-    except requests.RequestException as e:
+        search_data = provider_search(query=query, api_key=api_key, count=count, provider=provider)
+    except (requests.RequestException, Exception) as e:
         print(f"  Search failed: {e}")
         return {
             "id": query_id,
@@ -271,6 +302,7 @@ def run_pipeline(
     output_file: str = "outputs/search_dataset.jsonl",
     max_chars: int = 50000,
     start_id: int = 0,
+    provider: str = None,
 ):
     out_path = Path(output_file)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -296,6 +328,7 @@ def run_pipeline(
             api_key=api_key,
             count=count,
             max_chars=max_chars,
+            provider=provider,
         )
         written = append_record(out_path, record, existing_ids)
         if not written:
@@ -334,9 +367,15 @@ def main():
         help="Text file with one query per line",
     )
     parser.add_argument(
+        "--provider",
+        choices=["brave", "tavily"],
+        default=os.environ.get("SEARCH_PROVIDER", "brave"),
+        help="Search provider: 'brave' or 'tavily' (or SEARCH_PROVIDER env var, default: brave)",
+    )
+    parser.add_argument(
         "--api-key",
-        default=os.environ.get("BRAVE_API_KEY"),
-        help="Brave API key (or BRAVE_API_KEY env var)",
+        default=None,
+        help="Search API key (or set BRAVE_API_KEY / TAVILY_API_KEY env var)",
     )
     parser.add_argument("--count", type=int, default=10, help="Results per query (1-20)")
     parser.add_argument(
@@ -348,9 +387,17 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.api_key:
-        print("Error: BRAVE_API_KEY required. Set env var or use --api-key.")
-        sys.exit(1)
+    provider = args.provider.lower()
+    if provider == "tavily":
+        api_key = args.api_key or os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            print("Error: TAVILY_API_KEY required. Set env var or use --api-key.")
+            sys.exit(1)
+    else:
+        api_key = args.api_key or os.environ.get("BRAVE_API_KEY")
+        if not api_key:
+            print("Error: BRAVE_API_KEY required. Set env var or use --api-key.")
+            sys.exit(1)
 
     all_queries = []
 
@@ -374,15 +421,16 @@ def main():
         print("Error: No queries provided. Use positional arg, -q, or --queries-file.")
         sys.exit(1)
 
-    print(f"Pipeline: {len(all_queries)} queries → {args.output}")
+    print(f"Pipeline: {len(all_queries)} queries → {args.output} (provider: {provider})")
 
     run_pipeline(
         queries=all_queries,
-        api_key=args.api_key,
+        api_key=api_key,
         count=args.count,
         output_file=args.output,
         max_chars=args.max_chars,
         start_id=args.start_id,
+        provider=provider,
     )
 
 
