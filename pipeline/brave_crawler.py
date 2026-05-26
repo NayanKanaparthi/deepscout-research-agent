@@ -119,6 +119,74 @@ class BraveSearch:
         self.session.close()
 
 
+class TavilySearch:
+    """Real search using Tavily Search API."""
+
+    def __init__(self, api_key: str):
+        from tavily import TavilyClient
+
+        self.client = TavilyClient(api_key=api_key)
+
+    def search(self, query: str, count: int = 10) -> str:
+        """
+        Search Tavily and return formatted results.
+
+        Returns text in the same format as BraveSearch.search() —
+        numbered results with titles, URLs, and snippets.
+        """
+        try:
+            resp = self.client.search(
+                query=query,
+                max_results=count,
+                search_depth="basic",
+            )
+        except Exception as e:
+            log.warning(f"Tavily search error: {e}")
+            return f"Search error: {e}. Try a different query."
+
+        results = resp.get("results", [])
+        if not results:
+            return "No search results found. Try a different query."
+
+        formatted = []
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "No title")
+            url = r.get("url", "")
+            snippet = r.get("content", "No description available.")
+            formatted.append(f"{i}. {title}\n   {url}\n   {snippet}")
+
+        return "\n\n".join(formatted)
+
+    def close(self):
+        pass
+
+
+def get_search_client(provider: str = None):
+    """
+    Factory that returns a BraveSearch or TavilySearch instance
+    based on the SEARCH_PROVIDER env var or the explicit provider argument.
+
+    Args:
+        provider: 'brave' or 'tavily'. Falls back to SEARCH_PROVIDER env var,
+                  then defaults to 'brave'.
+
+    Returns:
+        A search client with a .search(query) -> str interface.
+    """
+    provider = (provider or os.environ.get("SEARCH_PROVIDER", "brave")).lower()
+
+    if provider == "tavily":
+        api_key = os.environ.get("TAVILY_API_KEY", "")
+        if not api_key:
+            raise ValueError("TAVILY_API_KEY env var is required when SEARCH_PROVIDER=tavily")
+        return TavilySearch(api_key=api_key)
+    else:
+        api_key = os.environ.get("BRAVE_API_KEY", "")
+        if not api_key:
+            raise ValueError("BRAVE_API_KEY env var is required when SEARCH_PROVIDER=brave")
+        return BraveSearch(api_key=api_key)
+
+
 class WebBrowser:
     """Real page fetching with content extraction."""
 
@@ -821,7 +889,7 @@ def run_batch(
 
     def worker(sample):
         mistral = MistralClient(os.environ["MISTRAL_API_KEY"])
-        brave = BraveSearch(os.environ["BRAVE_API_KEY"])
+        brave = get_search_client()
         browser = WebBrowser()
         scorer = OpenAIAPI(os.environ["open_ai_api_key"])
 
@@ -935,7 +1003,13 @@ def main():
     args = parser.parse_args()
 
     # Verify env vars
-    for var in ["MISTRAL_API_KEY", "BRAVE_API_KEY", "open_ai_api_key"]:
+    search_provider = os.environ.get("SEARCH_PROVIDER", "brave").lower()
+    required_vars = ["MISTRAL_API_KEY", "open_ai_api_key"]
+    if search_provider == "tavily":
+        required_vars.append("TAVILY_API_KEY")
+    else:
+        required_vars.append("BRAVE_API_KEY")
+    for var in required_vars:
         if not os.environ.get(var):
             log.error(f"Missing env var: {var}")
             sys.exit(1)
@@ -944,7 +1018,7 @@ def main():
     log.info("  Real Trajectory Generator")
     log.info("═══════════════════════════════════════════")
     log.info("  Mistral Large → agent decisions")
-    log.info("  Brave Search  → real search results")
+    log.info(f"  Search ({search_provider}) → real search results")
     log.info("  Web scraping  → real page content")
     log.info("  OpenAI        → PRM scoring only")
     log.info(f"  Target: {args.num} trajectories")

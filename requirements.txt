@@ -15,5 +15,8 @@ protobuf
 scipy
 numpy
 
+# Search
+tavily-python>=0.3.0
+
 # Experiment tracking
 wandb>=0.18.0

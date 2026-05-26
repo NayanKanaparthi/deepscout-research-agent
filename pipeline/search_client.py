@@ -12,6 +12,40 @@ import os
 BRAVE_API_URL = "https://api.search.brave.com/res/v1/web/search"
 
 
+def tavily_search(
+    query: str,
+    api_key: str,
+    count: int = 10,
+) -> dict:
+    """
+    Perform a web search using the Tavily Search API.
+
+    Args:
+        query:   Search query string
+        api_key: Tavily API key
+        count:   Number of results to return (default 10)
+
+    Returns:
+        Dict with 'web.results' structure matching Brave format for
+        downstream compatibility.
+    """
+    from tavily import TavilyClient
+
+    client = TavilyClient(api_key=api_key)
+    resp = client.search(query=query, max_results=count, search_depth="basic")
+
+    # Normalize to the same structure as Brave results
+    normalized_results = []
+    for r in resp.get("results", []):
+        normalized_results.append({
+            "title": r.get("title", ""),
+            "url": r.get("url", ""),
+            "description": r.get("content", ""),
+        })
+
+    return {"web": {"results": normalized_results}}
+
+
 def brave_search(
     query: str,
     api_key: str,
@@ -92,12 +126,18 @@ def print_results(data: dict) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Brave Search API CLI")
+    parser = argparse.ArgumentParser(description="Search API CLI (Brave / Tavily)")
     parser.add_argument("query", help="Search query")
     parser.add_argument(
+        "--provider",
+        choices=["brave", "tavily"],
+        default=os.environ.get("SEARCH_PROVIDER", "brave"),
+        help="Search provider: 'brave' or 'tavily' (or SEARCH_PROVIDER env var, default: brave)",
+    )
+    parser.add_argument(
         "--api-key",
-        default=os.environ.get("BRAVE_API_KEY"),
-        help="Brave Search API key (or set BRAVE_API_KEY env var)",
+        default=None,
+        help="Search API key (or set BRAVE_API_KEY / TAVILY_API_KEY env var)",
     )
     parser.add_argument("--count", type=int, default=10, help="Number of results (1-20)")
     parser.add_argument("--offset", type=int, default=0, help="Pagination offset")
@@ -118,31 +158,55 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.api_key:
-        print("Error: API key required. Set BRAVE_API_KEY env var or use --api-key.")
-        return
+    provider = args.provider.lower()
 
-    try:
-        results = brave_search(
-            query=args.query,
-            api_key=args.api_key,
-            count=args.count,
-            offset=args.offset,
-            country=args.country,
-            search_lang=args.lang,
-            safe_search=args.safe_search,
-            freshness=args.freshness,
-        )
+    if provider == "tavily":
+        api_key = args.api_key or os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            print("Error: API key required. Set TAVILY_API_KEY env var or use --api-key.")
+            return
 
-        if args.json:
-            print(json.dumps(results, indent=2))
-        else:
-            print_results(results)
+        try:
+            results = tavily_search(
+                query=args.query,
+                api_key=api_key,
+                count=args.count,
+            )
 
-    except requests.HTTPError as e:
-        print(f"HTTP Error: {e.response.status_code} - {e.response.text}")
-    except requests.RequestException as e:
-        print(f"Request failed: {e}")
+            if args.json:
+                print(json.dumps(results, indent=2))
+            else:
+                print_results(results)
+
+        except Exception as e:
+            print(f"Tavily search failed: {e}")
+    else:
+        api_key = args.api_key or os.environ.get("BRAVE_API_KEY")
+        if not api_key:
+            print("Error: API key required. Set BRAVE_API_KEY env var or use --api-key.")
+            return
+
+        try:
+            results = brave_search(
+                query=args.query,
+                api_key=api_key,
+                count=args.count,
+                offset=args.offset,
+                country=args.country,
+                search_lang=args.lang,
+                safe_search=args.safe_search,
+                freshness=args.freshness,
+            )
+
+            if args.json:
+                print(json.dumps(results, indent=2))
+            else:
+                print_results(results)
+
+        except requests.HTTPError as e:
+            print(f"HTTP Error: {e.response.status_code} - {e.response.text}")
+        except requests.RequestException as e:
+            print(f"Request failed: {e}")
 
 
 if __name__ == "__main__":
