@@ -108,6 +108,25 @@ function isMCQA(text) {
 
 // -- State --
 let isProcessing = false;
+let researchController = null;
+const parallelSessionId = crypto.randomUUID();
+const searchProviderSelect = document.getElementById("search-provider");
+const cancelBtn = document.getElementById("cancel-btn");
+const PROVIDER_STORAGE_KEY = "deepscout.searchProvider";
+searchProviderSelect.value = localStorage.getItem(PROVIDER_STORAGE_KEY) ?? "ddg";
+function updateSearchPrivacy() {
+  document.getElementById("search-privacy").textContent = searchProviderSelect.value === "parallel"
+    ? "Search queries and requested page URLs are sent to Parallel. Inference stays local."
+    : searchProviderSelect.value === "disabled" ? "Enable a search source to research a question."
+      : "Search and page reading use your active browser tab.";
+}
+searchProviderSelect.addEventListener("change", () => {
+  localStorage.setItem(PROVIDER_STORAGE_KEY, searchProviderSelect.value);
+  updateSearchPrivacy();
+});
+updateSearchPrivacy();
+cancelBtn.addEventListener("click", () => researchController?.abort(new Error("Research cancelled")));
+window.addEventListener("pagehide", () => researchController?.abort(new Error("Research cancelled")));
 
 // -- DOM refs --
 const chatContainer = document.getElementById("chat-container");
@@ -391,7 +410,7 @@ function escapeHtml(str) {
 
 // -- API Calls --
 
-async function callQueryAgent(question) {
+async function callQueryAgent(question, signal) {
   console.log("[QueryAgent] calling model with question:", question.substring(0, 100));
   const body = {
     model: CONFIG.queryAgentModel,
@@ -408,6 +427,7 @@ async function callQueryAgent(question) {
   };
   console.log("[QueryAgent] request body:", JSON.stringify(body).substring(0, 300));
   const resp = await fetch(CONFIG.queryAgentUrl, {
+    signal,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -544,7 +564,7 @@ function formatSearchContext(results) {
   return parts.join(SEPARATOR);
 }
 
-async function callReasoner(question, searchContext, mcqa) {
+async function callReasoner(question, searchContext, mcqa, signal) {
   console.log("[Reasoner] calling model, mcqa:", mcqa, "context length:", searchContext.length);
   const systemPrompt = mcqa
     ? REASONER_SYSTEM_PROMPT_MCQA
@@ -554,6 +574,7 @@ async function callReasoner(question, searchContext, mcqa) {
   console.log("[Reasoner] total user content length:", userContent.length);
 
   const resp = await fetch(CONFIG.reasonerUrl, {
+    signal,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -717,7 +738,22 @@ async function handleSend() {
   const text = userInput.value.trim();
   if (!text || isProcessing) return;
 
+  let provider;
+  try {
+    provider = DeepscoutSearch.resolveProvider(null, searchProviderSelect.value);
+    if (provider === "disabled") throw new Error("Search is disabled. Choose a search source first.");
+  } catch (error) {
+    addMessage("assistant", error.message);
+    return;
+  }
+  const parallel = provider === "parallel";
+  const client = parallel ? new DeepscoutSearch.ParallelSearchClient({ sessionId: parallelSessionId }) : null;
+  researchController = new AbortController();
+  const signal = researchController.signal;
+
   isProcessing = true;
+  searchProviderSelect.disabled = true;
+  cancelBtn.hidden = !parallel;
   sendBtn.disabled = true;
   userInput.value = "";
   userInput.style.height = "auto";
@@ -732,7 +768,7 @@ async function handleSend() {
 
     let searchQuery;
     try {
-      searchQuery = await callQueryAgent(text);
+      searchQuery = await callQueryAgent(text, signal);
       markStepDone(step1, "Search query generated");
       addSearchQueryDisplay(searchQuery);
     } catch (e) {
@@ -751,12 +787,19 @@ async function handleSend() {
 
     let searchResults;
     try {
-      searchResults = await searchViaTab(searchQuery);
+      if (parallel) {
+        const ready = await chrome.runtime.sendMessage({ action: "prepare_parallel" });
+        if (!ready?.ready) throw new Error(ready?.error || "Parallel request permissions unavailable");
+        await client.connect(signal);
+        searchResults = await client.search(searchQuery, signal);
+      } else {
+        searchResults = await searchViaTab(searchQuery);
+      }
       if (searchResults.length === 0) {
         markStepError(step2, "No results found");
         addMessage(
           "assistant",
-          "DuckDuckGo returned no results for this query. Try rephrasing your question."
+          "Search returned no results for this query. Try rephrasing your question."
         );
         return;
       }
@@ -765,20 +808,24 @@ async function handleSend() {
       markStepError(step2, "Search failed: " + e.message);
       addMessage(
         "assistant",
-        "DuckDuckGo search failed.\n\nError: " + e.message
+        (parallel ? "Parallel" : "DuckDuckGo") + " search failed.\n\nError: " + e.message
       );
       return;
     }
 
     // Step 2b: Scrape page content from top results
     setStatus("reading pages...", "var(--blue)");
-    const step2b = addPipelineStep("Scraping page content...");
+    const step2b = addPipelineStep(parallel ? "Reading search excerpts..." : "Scraping page content...");
 
     try {
-      searchResults = await scrapePages(searchResults);
+      searchResults = parallel ? await client.enrich(searchResults, searchQuery, signal) : await scrapePages(searchResults);
       var scraped = searchResults.filter(function (r) { return r.pageContent; }).length;
-      markStepDone(step2b, "Scraped " + scraped + " of " + Math.min(searchResults.length, CONFIG.maxResults) + " pages");
+      markStepDone(step2b, parallel ? "Search evidence ready" : "Scraped " + scraped + " of " + Math.min(searchResults.length, CONFIG.maxResults) + " pages");
     } catch (e) {
+      if (signal.aborted || parallel) {
+        markStepError(step2b, "Page reading failed: " + e.message);
+        throw e;
+      }
       markStepDone(step2b, "Page scraping skipped (using snippets)");
     }
 
@@ -796,7 +843,7 @@ async function handleSend() {
     let reasonerResponse;
     try {
       const searchContext = formatSearchContext(searchResults);
-      reasonerResponse = await callReasoner(text, searchContext, mcqa);
+      reasonerResponse = await callReasoner(text, searchContext, mcqa, signal);
       markStepDone(step3, "Reasoning complete");
     } catch (e) {
       markStepError(step3, "Reasoning failed: " + e.message);
@@ -840,6 +887,10 @@ async function handleSend() {
     addMessage("assistant", "Pipeline error: " + e.message);
     setStatus("error", "var(--error)");
   } finally {
+    if (client) await client.close();
+    researchController = null;
+    searchProviderSelect.disabled = false;
+    cancelBtn.hidden = true;
     isProcessing = false;
     sendBtn.disabled = false;
     userInput.focus();

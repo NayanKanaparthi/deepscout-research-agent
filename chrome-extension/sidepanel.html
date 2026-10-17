@@ -623,6 +623,16 @@
   </div>
 </div>
 
+<div class="search-settings" style="padding: 8px 16px;">
+  <label for="search-provider">Search source</label>
+  <select id="search-provider">
+    <option value="ddg">DuckDuckGo (browser tab)</option>
+    <option value="parallel">Parallel (no API key)</option>
+    <option value="disabled">Search disabled</option>
+  </select>
+  <div id="search-privacy" class="input-hint"></div>
+</div>
+
 <!-- Chat -->
 <div class="chat-container" id="chat-container">
   <div class="empty-state" id="empty-state">
@@ -646,10 +656,12 @@
       <textarea id="user-input" rows="1" placeholder="Ask a question..."></textarea>
     </div>
     <button class="send-btn" id="send-btn">&#x2191;</button>
+    <button id="cancel-btn" hidden>Cancel</button>
   </div>
   <div class="input-hint">Enter to send &middot; Shift+Enter for newline</div>
 </div>
 
+<script src="parallel-search.js"></script>
 <script src="sidepanel.js"></script>
 </body>
 </html>

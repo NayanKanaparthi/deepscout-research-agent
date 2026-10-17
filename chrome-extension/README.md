@@ -72,6 +72,38 @@ curl http://localhost:8000/v1/models
 
 ## Tools
 
+### Optional Parallel search
+
+In the Deepscout side panel, choose **Parallel (no API key)** under **Search
+source**. Your choice is saved locally between sessions. DuckDuckGo remains the
+default; choose it again to use browser-tab search and scraping. **Search disabled**
+prevents starting a research request.
+
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) provides
+free anonymous search powered by Fast mode at `https://search.parallel.ai/mcp`.
+No account, API key, server setup, or npm dependencies are needed. It has usage
+limits; an error is shown when a request fails, with no automatic provider switch.
+
+Parallel returns search excerpts directly to the existing local reasoner. When
+an excerpt is missing or shorter than 50 characters, Deepscout requests focused
+page excerpts through `web_fetch`. Both operations leave the active tab alone.
+They send queries and requested page URLs to Parallel; model inference still uses
+your local vLLM endpoints. DuckDuckGo's browser scraping remains available for
+pages requiring your browser session or other DOM interaction.
+
+Each MCP request times out after 20 seconds. **Cancel** stops an in-flight Parallel
+research request, including local inference; closing the panel also cancels it.
+The extension's `declarativeNetRequestWithHostAccess` permission sets its project
+User-Agent only on extension-initiated requests to the Parallel MCP endpoint.
+It does not change ordinary browser requests. Existing host permissions still
+apply; a denied network request is reported as an error.
+
+Run the dependency-free JavaScript checks with Node.js 22 or newer:
+
+```bash
+node --test chrome-extension/tests/*.test.js
+```
+
 | Tool | What it does |
 |------|-------------|
 | `web_search(query)` | Opens Google search in active tab, scrapes top results |

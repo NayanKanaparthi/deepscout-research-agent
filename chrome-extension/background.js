@@ -94,6 +94,26 @@ function navigateAndExtract(tabId, url, timeoutMs) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "prepare_parallel") {
+    // Chrome drops fetch's User-Agent header. Apply it only to this extension's
+    // requests to the anonymous MCP endpoint, never to normal browser traffic.
+    chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [1001],
+      addRules: [{
+        id: 1001, priority: 1,
+        action: { type: "modifyHeaders", requestHeaders: [{
+          header: "User-Agent", operation: "set",
+          value: "Deepscout/1.1.0 (https://github.com/NayanKanaparthi/deepscout-research-agent)",
+        }] },
+        condition: {
+          regexFilter: "^https://search\\.parallel\\.ai/mcp$",
+          initiatorDomains: [chrome.runtime.id], resourceTypes: ["xmlhttprequest"],
+        },
+      }],
+    }).then(() => sendResponse({ ready: true }))
+      .catch((error) => sendResponse({ error: error.message }));
+    return true;
+  }
   if (message.action === "do_search") {
     handleDoSearch(message);
     return true;

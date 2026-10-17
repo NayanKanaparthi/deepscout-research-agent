@@ -20,6 +20,11 @@ All inference runs on **Ministral-3-3B-Instruct** with LoRA adapters served via 
 
 ## Architecture
 
+The Chrome side panel also offers optional [Parallel Search MCP](chrome-extension/README.md#optional-parallel-search)
+for free search and page excerpts without navigating the active tab. DuckDuckGo
+remains the default. Parallel requires no account or API key and sends queries
+and requested page URLs to its remote service; model inference stays local.
+
 A detailed architecture diagram (runtime flow, training pipeline, data formats, component map) is in **[docs/architecture.md](docs/architecture.md)** — including Mermaid sequence/flow diagrams for GitHub.
 
 High-level flow:
